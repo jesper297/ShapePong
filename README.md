@@ -6,7 +6,8 @@ Ett snabbt Pong-spel mot datorn, byggt med Kotlin och en egenritad Android View.
 
 - Dra fingret i sidled för att styra det gröna racket.
 - Välj **Platt**, **Båge** eller **Vinkel** längst ned när som helst.
-- Platt ger klassisk studs, bågen ger snabbare och rakare returer, och vinkeln ger kraftig sidostyrning beroende på träffpunkten.
+- **Platt** ger klassisk studs efter träffpunkten, **Båge** skickar bollen utåt längs kurvan och **Vinkel** ger en fast, skarp diagonal åt vänster eller höger.
+- Bollens fart ökar kontinuerligt och får dessutom en extra skjuts efter varje racketslag. Fart och duellängd visas mitt på planen.
 - Första till valfri poängsumma – matchen fortsätter tills du lämnar spelet.
 
 ## Förutsättningar
