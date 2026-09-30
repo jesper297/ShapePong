@@ -25,6 +25,8 @@ class GameView(context: Context) : View(context) {
     private var lastFrame = 0L
     private var running = false
     private var shape = 0
+    private var baseBallSpeed = 1f
+    private var rallyHits = 0
     private val shapes = arrayOf("PLATT", "BÅGE", "VINKEL")
 
     private val density = resources.displayMetrics.density
@@ -40,8 +42,10 @@ class GameView(context: Context) : View(context) {
         ballX = width / 2f
         ballY = height / 2f
         val speed = min(width, height) * .48f
+        baseBallSpeed = speed
+        rallyHits = 0
         vx = speed * Random.nextDouble(-.42, .42).toFloat()
-        vy = speed * direction
+        vy = sqrt(speed * speed - vx * vx) * direction
         running = false
         postDelayed({ running = true; lastFrame = System.nanoTime(); invalidate() }, 650)
     }
@@ -80,6 +84,9 @@ class GameView(context: Context) : View(context) {
         muted.textSize = dp(11f)
         muted.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         c.drawText("DATOR      DU", width / 2f, height / 2f + dp(8f), muted)
+        muted.textSize = dp(9f)
+        val speedMultiplier = (hypot(vx, vy) / baseBallSpeed).coerceAtLeast(1f)
+        c.drawText("FART ×${String.format("%.1f", speedMultiplier)}  •  DUELL $rallyHits", width / 2f, height / 2f + dp(25f), muted)
 
         val cy = height - dp(48f)
         val bw = dp(84f)
@@ -129,6 +136,7 @@ class GameView(context: Context) : View(context) {
     private fun update() {
         if (lastFrame == 0L) return
         val dt = ((System.nanoTime() - lastFrame) / 1_000_000_000f).coerceIn(0f, .025f)
+        accelerateOverTime(dt)
         ballX += vx * dt
         ballY += vy * dt
         val r = dp(9f)
@@ -146,8 +154,10 @@ class GameView(context: Context) : View(context) {
         if (vy < 0 && ballY <= dp(108f) && ballY >= dp(76f) && abs(ballX - enemyX) < dp(64f)) {
             ballY = dp(110f)
             val hit = ((ballX - enemyX) / dp(54f)).coerceIn(-1f, 1f)
-            vy = abs(vy) * 1.035f
-            vx += hit * width * .28f
+            rallyHits++
+            val speed = nextBounceSpeed(1.03f)
+            val horizontal = (hit * .68f + vx / speed * .16f).coerceIn(-.82f, .82f)
+            setBallDirection(speed, horizontal, 1)
         }
         if (ballY < -r) { playerScore++; resetBall(1) }
         if (ballY > height + r) { enemyScore++; resetBall(-1) }
@@ -156,23 +166,48 @@ class GameView(context: Context) : View(context) {
     private fun bounceFromPlayer() {
         val hit = ((ballX - playerX) / dp(54f)).coerceIn(-1f, 1f)
         ballY = height - dp(140f)
+        rallyHits++
+        val speed = nextBounceSpeed(if (shape == 1) 1.045f else 1.035f)
         when (shape) {
-            1 -> { // Båge: jämnar ut, men ger högre fart
-                vx = vx * .45f + hit * width * .18f
-                vy = -abs(vy) * 1.10f
+            1 -> { // Båge: den lokala kurvan skickar bollen tydligt utåt.
+                val horizontal = (hit * .90f + vx / speed * .08f).coerceIn(-.88f, .88f)
+                setBallDirection(speed, horizontal, -1)
             }
-            2 -> { // Vinkel: kraftig riktning beroende på träffpunkt
-                vx = hit * width * .78f
-                vy = -abs(vy) * .94f
+            2 -> { // Vinkel: respektive halva ger en fast, skarp diagonal.
+                val side = when {
+                    hit < -.10f -> -1f
+                    hit > .10f -> 1f
+                    vx < 0f -> -1f
+                    else -> 1f
+                }
+                setBallDirection(speed, side * .78f, -1)
             }
-            else -> { // Platt: klassisk Pong-studs
-                vx += hit * width * .35f
-                vy = -abs(vy) * 1.035f
+            else -> { // Platt: klassisk Pong-studs styrd av träffpunkten.
+                val horizontal = (hit * .70f + vx / speed * .18f).coerceIn(-.82f, .82f)
+                setBallDirection(speed, horizontal, -1)
             }
         }
-        val maxSpeed = width * 1.15f
-        vx = vx.coerceIn(-maxSpeed, maxSpeed)
-        vy = vy.coerceIn(-maxSpeed, maxSpeed)
+    }
+
+    private fun accelerateOverTime(dt: Float) {
+        val speed = hypot(vx, vy)
+        val maxSpeed = min(width, height) * 1.45f
+        if (speed <= 0f || speed >= maxSpeed) return
+        val target = (speed * (1f + dt * .012f)).coerceAtMost(maxSpeed)
+        val scale = target / speed
+        vx *= scale
+        vy *= scale
+    }
+
+    private fun nextBounceSpeed(boost: Float): Float {
+        val maxSpeed = min(width, height) * 1.45f
+        return (hypot(vx, vy) * boost).coerceAtMost(maxSpeed)
+    }
+
+    private fun setBallDirection(speed: Float, horizontalRatio: Float, verticalDirection: Int) {
+        val ratio = horizontalRatio.coerceIn(-.90f, .90f)
+        vx = speed * ratio
+        vy = sqrt((speed * speed - vx * vx).coerceAtLeast(0f)) * verticalDirection
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
